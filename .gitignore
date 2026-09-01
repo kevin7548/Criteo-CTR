@@ -1,0 +1,25 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Data and generated artifacts
+data/
+artifacts/
+mlruns/
+*.parquet
+*.onnx
+*.pt
+*.pth
+*.ckpt
+
+# Local dataset folder
+kaggle-display-advertising-challenge-dataset/
+
+# Environment
+.env
+.env.*
