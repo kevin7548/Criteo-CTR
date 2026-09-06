@@ -1,0 +1,29 @@
+{
+  "description": "Project-local Codex lifecycle hooks.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/tdd-guard.sh\"",
+            "statusMessage": "TDD 테스트 선행 여부 검사 중",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-commit-checks.sh\"",
+            "statusMessage": "커밋 전 lint, build, test 실행 중",
+            "timeout": 1800
+          }
+        ]
+      }
+    ]
+  }
+}
