@@ -1,141 +1,62 @@
 # CriteoCTR-Lab
 
-[English](README.md) | [한국어](README.ko.md)
+Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에서 드러나는 문제**를 측정하고 고치는 CTR 예측 실험입니다.
 
-Large-scale sparse click log experiments for pointwise ad click scoring.
+## 핵심 주장
 
-## Project Goal
+클릭이 아닌 샘플(negative)을 줄여서 학습하면 AUC는 거의 그대로지만, 평균 예측 CTR이 크게 부풀어 오릅니다. 이 문제는 AUC에는 드러나지 않고 LogLoss와 ECE에서만 보입니다. 샘플링 비율을 알면 `logit(q) = logit(p) + log w` 한 줄로 보정할 수 있습니다.
 
-This project studies whether feature-interaction models such as DeepFM and DCNv2 justify their extra inference cost over linear CTR baselines on sparse advertising logs.
+결과는 세 숫자로 정리합니다.
 
-The project is not presented as a full ranking system because the Criteo dataset does not include query, session, request, user, auction, or candidate-list identifiers. Instead, it focuses on a pointwise scoring layer commonly used inside ranking and advertising systems.
+| | 측정 | 기대 |
+|---|---|---|
+| 1 | AUC: 전체 데이터 모델 vs downsampled 모델 | 거의 같음 |
+| 2 | 평균 예측 CTR vs 실제 CTR | downsampled 모델에서 크게 부풀어 오름 |
+| 3 | 보정 후 ECE · LogLoss | 전체 데이터 모델 수준으로 회복 (버린 데이터만큼의 차이는 남음) |
 
-## Core Question
+## 데이터
 
-How much do non-linear feature-interaction models improve click prediction quality over linear baselines, and when does that improvement justify additional latency and memory cost?
+- Criteo Display Advertising Challenge (Kaggle) `train.txt`: 약 4,580만 행, 7일치, 라벨 1개 + 수치 피처 13개 + 범주형 피처 26개
+- `test.txt`는 라벨이 없어 쓰지 않습니다.
+- 분할: 원본 순서를 유지한 7개 블록. 학습 1–5, 검증 6, 테스트 7
+- vocab과 정규화 통계는 학습 블록에서만 계산합니다.
 
-## Data
+## 실험
 
-- Dataset: Criteo Display Advertising Challenge
-- Format: label, 13 numerical features, 26 categorical features
-- Split policy: preserve original order and create chronological blocks
-- Train: blocks 1-5
-- Validation: block 6A
-- Calibration fitting: block 6B
-- Final test: block 7
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 예정 |
+| 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 예정 |
+| 3 | LR 학습 | 예정 |
+| 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 예정 |
+| 5 | DCNv2와 LR 비교 (seed 3개, bootstrap 신뢰구간) | 예정 |
+| 6 | (선택) 피처 빈도 구간(head/mid/tail/OOV)별 LogLoss · ECE | 예정 |
 
-The blocks are chronological blocks, not calendar days. The project will only claim temporal distance and drift patterns, not exact retraining intervals.
+## 지표
 
-## Scope
+- **LogLoss / NE**: 확률 품질. NE는 상수 CTR 기준선의 LogLoss로 나눈 값입니다.
+- **AUC**: 순위 품질. 단조 변환에 불변이라 calibration 문제를 잡지 못합니다.
+- **ECE**: 샘플 수가 같은 20개 구간 기준 calibration 오차입니다.
+- **PCOC**: 평균 예측 CTR / 실제 CTR.
 
-Included:
+## 한계
 
-- Out-of-core preprocessing with sharded Parquet
-- Train-only preprocessing statistics
-- Leakage tests
-- Constant CTR and linear baselines
-- DeepFM and DCNv2 experiments
-- Calibration on the sampled data distribution
-- Controlled prior-shift sensitivity experiment
-- Segment-wise robustness diagnostics
-- Model quality, latency, memory, and size trade-off analysis
-- Reproducible command harness
+- Criteo 데이터 자체가 이미 샘플링된 분포이고 원래 샘플링 비율은 공개되지 않았습니다. 이 프로젝트의 calibration 결과는 그 샘플링된 분포 기준이며, 실제 서비스 CTR을 복원한다고 주장하지 않습니다.
+- 블록은 시간순이지만 정확한 날짜 경계는 아닙니다.
+- 데이터에 사용자·세션·경매 정보가 없어서, 이 프로젝트는 전체 랭킹 시스템이 아니라 그 안의 pointwise 점수 모델만 다룹니다.
 
-Excluded from the core project:
+## 범위 밖
 
-- NDCG, Recall@K, and GAUC
-- CVR, ROAS, auction outcome, and true production CTR recovery
-- Real A/B test claims
-- Spark, Airflow, Kafka, Kubernetes, and TorchRec
+DeepFM, ONNX 추론 벤치마크, latency·memory 비교, LightGBM, FTRL, 랭킹 지표(NDCG 등), 실제 A/B 테스트 주장.
 
-Spark may be revisited only as a separate extension if the project moves to a larger Criteo 1TB subset where single-node processing is empirically insufficient.
+## 설계 결정
 
-## Stack
+[docs/ADR.md](docs/ADR.md)
 
-- Data: Polars, PyArrow, sharded Parquet
-- Training: PyTorch, IterableDataset
-- Experiments: MLflow
-- Evaluation: scikit-learn, custom calibration and segment reports
-- Inference benchmark: ONNX Runtime
-- Quality gates: pytest
-- Reproducibility: Makefile and CLI scripts
+## 개발
 
-## Models
-
-1. Constant CTR baseline
-2. Hashed Logistic Regression with FTRL-Proximal
-3. DeepFM
-4. DCNv2-small
-5. DCNv2-large
-
-LightGBM is used only on a chronological sample as a diagnostic baseline, not as a full-data production candidate.
-
-DeepFM and DCNv2-small should be compared under matched embedding and dense parameter budgets. DCNv2-large is treated as a scaling experiment.
-
-## Metrics
-
-Prediction quality:
-
-- LogLoss
-- Normalized Cross-Entropy
-- ROC-AUC
-- PR-AUC
-- Brier score
-- ECE
-- PCOC
-
-Robustness:
-
-- Chronological block performance
-- Head, mid, tail categorical frequency segments
-- Seen and OOV categorical segments
-- Missing-value segments
-- Numerical availability segments
-
-Systems:
-
-- Model size
-- Peak RSS
-- p50, p95, p99 model-only latency
-- QPS under fixed benchmark conditions
-
-## Calibration Policy
-
-Calibration is measured only on the sampled Criteo distribution.
-
-Because the original positive and negative sampling rates are unknown, this project will not claim to recover true production CTR. Instead, it will:
-
-- fit Platt scaling or isotonic regression on block 6B;
-- evaluate sampled-distribution calibration on block 7;
-- run a controlled known-prior-shift experiment where the shift is artificially created and therefore measurable;
-- report hypothetical deployment-prior sensitivity only as prediction and threshold sensitivity, not as true ECE or true CTR recovery.
-
-## Five-Week Plan
-
-| Week | Deliverable |
-| --- | --- |
-| 1 | Hydrate data, convert TSV to sharded Parquet, create chronological blocks, compute train-only stats, add leakage tests |
-| 2 | Build Constant CTR, FTRL/LR, LightGBM sample baseline, and evaluation harness |
-| 3 | Run preprocessing, hashing, vocabulary, DeepFM, and DCNv2 experiments |
-| 4 | Complete calibration, controlled prior-shift, temporal drift, and segment-wise diagnostics |
-| 5 | Profile inference, export ONNX, benchmark latency/memory, write final README and model card |
-
-Optional weeks 6-7:
-
-- offline replay / shadow comparison document
-- A/B test design document
-- technical blog post
-- auction sensitivity analysis
-- larger-scale Spark extension on Criteo 1TB subset
-
-## Definition of Done
-
-- Full training pipeline runs out-of-core
-- Split is reproducible and order-preserving
-- Preprocessing uses train-derived statistics only
-- Leakage tests pass
-- Baselines and deep models are compared under clear budgets
-- Calibration claims are limited to valid distributions
-- Segment reports reveal weak regions behind global metrics
-- ONNX benchmark uses fixed measurement conditions
-- Final report includes failures, limitations, and decision reasons
+```bash
+uv sync
+uv run pytest -q
+uv run ruff check .
+```

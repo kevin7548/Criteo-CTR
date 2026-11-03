@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Pre-commit quality gate for Codex Bash tool calls.
-# Runs lint, build, and test before allowing `git commit`.
+# Pre-commit quality gate for Claude Code Bash tool calls.
+# Runs lint and test before allowing `git commit`.
 
 set -u
 
@@ -37,19 +37,8 @@ fi
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 cd "$PROJECT_ROOT" || exit 0
 
-if [ -f package.json ]; then
-  DEFAULT_LINT_CMD="npm run lint"
-  DEFAULT_BUILD_CMD="npm run build"
-  DEFAULT_TEST_CMD="npm run test"
-else
-  DEFAULT_LINT_CMD="uvx ruff check scripts"
-  DEFAULT_BUILD_CMD="python3 -m compileall -q scripts"
-  DEFAULT_TEST_CMD="uvx pytest scripts -q"
-fi
-
-LINT_CMD=${CODEX_LINT_CMD:-$DEFAULT_LINT_CMD}
-BUILD_CMD=${CODEX_BUILD_CMD:-$DEFAULT_BUILD_CMD}
-TEST_CMD=${CODEX_TEST_CMD:-$DEFAULT_TEST_CMD}
+LINT_CMD=${CHECK_LINT_CMD:-"uv run ruff check ."}
+TEST_CMD=${CHECK_TEST_CMD:-"uv run pytest -q"}
 
 deny_from_log() {
   local check_name="$1"
@@ -81,7 +70,7 @@ run_check() {
   local check_command="$2"
   local log_file
 
-  log_file=$(mktemp "${TMPDIR:-/tmp}/codex-pre-commit.XXXXXX") || return 1
+  log_file=$(mktemp "${TMPDIR:-/tmp}/pre-commit-checks.XXXXXX") || return 1
   if bash -lc "$check_command" >"$log_file" 2>&1; then
     rm -f "$log_file"
     return 0
@@ -93,7 +82,6 @@ run_check() {
 }
 
 run_check "lint" "$LINT_CMD" || exit 0
-run_check "build" "$BUILD_CMD" || exit 0
 run_check "test" "$TEST_CMD" || exit 0
 
 exit 0
