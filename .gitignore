@@ -8,8 +8,8 @@ __pycache__/
 venv/
 
 # Data and generated artifacts
-data/
-artifacts/
+/data/
+/artifacts/
 mlruns/
 *.parquet
 *.onnx
