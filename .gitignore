@@ -8,8 +8,8 @@ __pycache__/
 venv/
 
 # Data and generated artifacts
-data/
-artifacts/
+/data/
+/artifacts/
 mlruns/
 *.parquet
 *.onnx
@@ -23,3 +23,6 @@ kaggle-display-advertising-challenge-dataset/
 # Environment
 .env
 .env.*
+
+# Claude Code local overrides
+.claude/settings.local.json
