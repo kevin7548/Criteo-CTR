@@ -26,7 +26,7 @@ Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에�
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 완료 |
-| 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 예정 |
+| 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 완료 |
 | 3 | LR 학습 | 예정 |
 | 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 예정 |
 | 5 | DCNv2와 LR 비교 (seed 3개, bootstrap 신뢰구간) | 예정 |
@@ -34,9 +34,9 @@ Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에�
 
 ## 지표
 
-- **LogLoss / NE**: 확률 품질. NE는 상수 CTR 기준선의 LogLoss로 나눈 값입니다.
+- **LogLoss / NE**: 확률 품질. NE는 학습 블록 CTR을 상수로 예측한 기준선의 LogLoss로 나눈 값입니다.
 - **AUC**: 순위 품질. 단조 변환에 불변이라 calibration 문제를 잡지 못합니다.
-- **ECE**: 샘플 수가 같은 20개 구간 기준 calibration 오차입니다.
+- **ECE**: 샘플 수가 같은 20개 구간 기준 calibration 오차입니다. 같은 예측값은 한 구간에 묶습니다(ADR-008).
 - **PCOC**: 평균 예측 CTR / 실제 CTR.
 
 ## 한계
