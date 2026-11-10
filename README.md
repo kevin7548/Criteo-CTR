@@ -25,7 +25,7 @@ Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에�
 
 | 단계 | 내용 | 상태 |
 |---|---|---|
-| 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 분할 완료, 기준선 예정 |
+| 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 완료 |
 | 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 예정 |
 | 3 | LR 학습 | 예정 |
 | 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 예정 |
@@ -60,5 +60,7 @@ uv sync
 uv run pytest -q
 # train.txt → data/blocks/block_{1..7} (ADR-007)
 uv run python -m ctr.data.split --src kaggle-display-advertising-challenge-dataset/train.txt --out data/blocks
+# 상수 CTR 기준선 → reports/baseline_constant.json
+uv run python -m ctr.baseline
 uv run ruff check .
 ```
