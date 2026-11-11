@@ -5,6 +5,7 @@ description = "CTR calibration experiments on the Criteo Kaggle click log"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "numpy>=2.5.4",
     "polars>=1.0",
     "pyarrow>=16",
 ]
@@ -20,6 +21,7 @@ packages = ["src/ctr"]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
+    "scikit-learn>=1.9.1",
 ]
 
 [tool.pytest.ini_options]
