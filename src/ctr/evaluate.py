@@ -42,15 +42,18 @@ def predict(
     """Labels (int8) and click probabilities (float64) for `files`, in row order."""
     was_training = model.training
     model.eval()
-    labels, probs = [], []
+    labels, logits_out = [], []
     try:
         for ids, y in iter_batches(files, batch_size):
             logits = model(torch.from_numpy(ids).to(device).long())
-            probs.append(torch.sigmoid(logits.float()).cpu().numpy())
+            logits_out.append(logits.float().cpu().numpy())
             labels.append(y)
     finally:
         model.train(was_training)
-    return np.concatenate(labels), np.concatenate(probs).astype(np.float64)
+    # Sigmoid in float64: float32 rounds 1 - p for confident rows, and prior
+    # correction (ctr.calibration) would magnify that rounding.
+    z = np.concatenate(logits_out).astype(np.float64)
+    return np.concatenate(labels), 1 / (1 + np.exp(-z))
 
 
 def evaluate_split(y: np.ndarray, p: np.ndarray, base_rate: float) -> dict:

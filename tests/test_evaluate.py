@@ -72,3 +72,14 @@ def test_evaluate_split_reports_summary_and_calibration_bins():
 def test_resolve_device():
     assert resolve_device("cpu") == "cpu"
     assert resolve_device("auto") in {"cpu", "mps", "cuda"}
+
+
+def test_predict_keeps_precision_for_confident_rows(encoded):
+    # float32 sigmoid rounds 1 - p near p = 1; prior correction then magnifies that error.
+    sizes = json.loads((encoded / "manifest.json").read_text())["field_sizes"]
+    model = LogisticRegression(sizes)
+    with torch.no_grad():
+        model.bias.fill_(12.0)
+
+    _, p = predict(model, split_files(encoded, (6,)), batch_size=128, device="cpu")
+    np.testing.assert_allclose(1 - p, 1 / (1 + np.exp(12.0)), rtol=1e-6)

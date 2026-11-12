@@ -4,6 +4,11 @@ Evaluation reads shards in order and yields rows in their original order.
 Training shuffles at two levels (ADR-010): the shard order is permuted, then
 `shards_per_chunk` shards at a time are loaded together and their rows permuted,
 so a batch mixes rows from several points in time.
+
+Negative downsampling (ADR-011) is decided per shard before any shuffling: each
+shard's mask comes from an RNG seeded by (sample_seed, the shard's position in
+`files`), so the same rows are kept in every epoch, whatever the shuffle seed or
+chunking, and a run on the first k shards keeps exactly what the full run keeps there.
 """
 
 from __future__ import annotations
@@ -14,6 +19,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
+from ctr.calibration import negative_keep_mask
 from ctr.data.split import block_files
 from ctr.data.vocab import FIELDS
 
@@ -37,6 +43,18 @@ def load_arrays(files: Sequence[Path]) -> Batch:
     return ids, labels
 
 
+def _load_sampled(
+    files: Sequence[Path], indices: Sequence[int], keep_rate: float, sample_seed: int
+) -> Batch:
+    """Rows of files[i] for i in `indices`, negatives kept at `keep_rate` per shard."""
+    parts = []
+    for i in indices:
+        ids, labels = load_arrays([files[i]])
+        keep = negative_keep_mask(labels, keep_rate, np.random.default_rng([sample_seed, i]))
+        parts.append((ids[keep], labels[keep]))
+    return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
+
+
 def iter_batches(
     files: Sequence[Path],
     batch_size: int,
@@ -44,18 +62,29 @@ def iter_batches(
     shuffle: bool = False,
     seed: int = 0,
     shards_per_chunk: int = 4,
+    negative_keep_rate: float = 1.0,
+    sample_seed: int = 0,
 ) -> Iterator[Batch]:
-    """Yield (ids, labels) batches of at most `batch_size` rows over `files`."""
+    """Yield (ids, labels) batches of at most `batch_size` rows over `files`.
+
+    `negative_keep_rate < 1` is for training only; evaluation always reads every row.
+    """
     if batch_size < 1:
         raise ValueError(f"batch_size must be >= 1, got {batch_size}")
     if shards_per_chunk < 1:
         raise ValueError(f"shards_per_chunk must be >= 1, got {shards_per_chunk}")
+    if not 0 < negative_keep_rate <= 1:
+        raise ValueError(f"negative_keep_rate must be in (0, 1], got {negative_keep_rate}")
 
     rng = np.random.default_rng(seed)
     order = rng.permutation(len(files)) if shuffle else np.arange(len(files))
     chunk = shards_per_chunk if shuffle else 1
     for start in range(0, len(order), chunk):
-        ids, labels = load_arrays([files[i] for i in order[start : start + chunk]])
+        indices = order[start : start + chunk]
+        if negative_keep_rate < 1:
+            ids, labels = _load_sampled(files, indices, negative_keep_rate, sample_seed)
+        else:
+            ids, labels = load_arrays([files[i] for i in indices])
         if shuffle:
             perm = rng.permutation(len(labels))
             ids, labels = ids[perm], labels[perm]

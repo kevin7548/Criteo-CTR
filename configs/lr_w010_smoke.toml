@@ -1,0 +1,25 @@
+# Smoke run for w = 0.1 on the first 5 training shards and 2 validation shards,
+# same slice as configs/lr_smoke.toml (AGENTS.md).
+seed = 0
+device = "auto"
+
+[model]
+name = "lr"
+
+[data]
+encoded = "data/encoded"
+max_train_shards = 5
+max_val_shards = 2
+evaluate_test = false
+negative_keep_rate = 0.1
+
+[train]
+batch_size = 4096
+lr = 0.001
+epochs = 10
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/lr_w010_smoke"
+report = "artifacts/lr_w010_smoke/report.json"

@@ -122,3 +122,53 @@ def test_iter_batches_rejects_bad_arguments(encoded):
         next(iter_batches(files, 0))
     with pytest.raises(ValueError):
         next(iter_batches(files, 8, shards_per_chunk=0))
+    with pytest.raises(ValueError):
+        next(iter_batches(files, 8, negative_keep_rate=0.0))
+
+
+# --- negative downsampling (ADR-011) ----------------------------------------
+
+
+def sampled(files, **kwargs):
+    batches = iter_batches(files, 32, shuffle=True, negative_keep_rate=0.5, **kwargs)
+    ids, labels = zip(*batches)
+    return np.concatenate(ids)[:, 0], np.concatenate(labels)
+
+
+def test_downsampling_keeps_all_positives_and_some_negatives(encoded):
+    files = split_files(encoded, (1, 2))
+    rows, labels = sampled(files, seed=0)
+
+    assert sorted(rows[labels == 1].tolist()) == list(range(1, 401, 2))
+    assert 0 < (labels == 0).sum() < 201
+    assert (labels == rows % 2).all()
+
+
+def test_downsampling_keeps_the_same_rows_whatever_the_shuffle(encoded):
+    files = split_files(encoded, (1, 2))
+    a, _ = sampled(files, seed=0, shards_per_chunk=2)
+    b, _ = sampled(files, seed=5, shards_per_chunk=3)
+
+    assert sorted(a.tolist()) == sorted(b.tolist())
+    assert a.tolist() != b.tolist()
+
+
+def test_downsampling_on_a_prefix_keeps_what_the_full_run_keeps_there(encoded):
+    files = split_files(encoded, (1, 2))
+    full, _ = sampled(files, seed=0)
+    prefix, _ = sampled(files[:2], seed=1)
+
+    assert sorted(prefix.tolist()) == sorted(r for r in full.tolist() if r < 200)
+
+
+def test_downsampling_mask_depends_on_sample_seed(encoded):
+    files = split_files(encoded, (1, 2))
+    a, _ = sampled(files, seed=0, sample_seed=0)
+    b, _ = sampled(files, seed=0, sample_seed=1)
+
+    assert sorted(a.tolist()) != sorted(b.tolist())
+
+
+def test_unshuffled_reads_ignore_nothing_by_default(encoded):
+    files = split_files(encoded, (1, 2))
+    assert len(row_ids(iter_batches(files, 32))) == 401
