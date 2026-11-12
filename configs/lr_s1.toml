@@ -1,0 +1,22 @@
+# LR as configs/lr.toml with seed 1, for the seed comparison with DCNv2 (step 5).
+# lr = 0.001 was the best of {3e-4, 1e-3, 3e-3, 1e-2} in the smoke run (reports/lr_smoke_sweep.log).
+seed = 1
+device = "auto"
+
+[model]
+name = "lr"
+
+[data]
+encoded = "data/encoded"
+evaluate_test = true
+
+[train]
+batch_size = 4096
+lr = 0.001
+epochs = 5
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/lr_s1"
+report = "reports/model_comparison/lr_s1.json"

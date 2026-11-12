@@ -1,0 +1,28 @@
+# DCNv2 smoke run on the same slice as configs/lr_smoke.toml (first 5 training shards,
+# 2 validation shards). Checks the pipeline, timing and the learning rate (AGENTS.md).
+seed = 0
+device = "auto"
+
+[model]
+name = "dcnv2"
+embed_dim = 16
+cross_layers = 3
+hidden = [400, 400, 400]
+dropout = 0.0
+
+[data]
+encoded = "data/encoded"
+max_train_shards = 5
+max_val_shards = 2
+evaluate_test = false
+
+[train]
+batch_size = 4096
+lr = 0.003
+epochs = 3
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/dcnv2_smoke"
+report = "artifacts/dcnv2_smoke/report.json"

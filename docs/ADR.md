@@ -66,6 +66,11 @@
 **이유**: shard 단위 고정 마스크라 epoch마다 다른 음성을 보는 일(사실상 더 많은 데이터를 쓰는 효과)이 없고, 앞쪽 일부로 돌린 smoke 실험이 전체 실험과 같은 행을 쓴다. 보정식은 `w`만 알면 되므로 epoch 선택에 보정 후 지표를 써도 검증 라벨로 따로 맞춘 것이 없다.
 **트레이드오프**: seed 하나(0)로만 돌린다. `w`마다 학습 행 수가 달라 같은 epoch 수에서 optimizer step 수가 다르다.
 
+### ADR-012: DCNv2 구조와 설정
+**결정**: DCN-V2(Wang et al., 2021)의 parallel 구조를 쓴다. 39개 필드 id마다 16차원 embedding(정규분포 std 1e-4로 초기화)을 이어 붙인 `x0`(624차원)를 full-rank cross layer 3개(`x_{l+1} = x0 ⊙ (W_l x_l + b_l) + x_l`)와 MLP `[400, 400, 400]`(ReLU, dropout 0)에 각각 넣고, 두 출력을 이어 붙여 선형 층 하나로 logit을 낸다. 출력 층은 weight 0, bias `logit(학습 블록 CTR)`에서 시작한다. 데이터, 학습 루프, epoch 선택, 평가는 LR과 같고(ADR-006, ADR-010) 학습률만 앞쪽 5개 shard에서 고른다. 비교는 seed 0, 1, 2로 LR과 DCNv2를 각각 학습해 한다.
+**이유**: embedding 차원 16, cross 3층, MLP 400×3은 BARS/FuxiCTR Criteo 벤치마크에서 흔히 쓰는 크기라 ADR-009의 전처리와 함께 비교 기준이 된다. 출력 층을 0에서 시작하면 LR처럼 상수 CTR 기준선(NE = 1)에서 출발해, 두 모델이 같은 출발점과 같은 epoch 선택 규칙을 갖는다.
+**트레이드오프**: 하이퍼파라미터 탐색은 학습률 하나뿐이다. batch norm, embedding 규제, low-rank/MoE cross 같은 변형은 쓰지 않는다. MPS 연산은 비트 단위로 재현되지 않는다(ADR-010).
+
 ### ADR-013: 신뢰구간은 paired Poisson bootstrap
 **결정**: 모델 간 차이의 95% 신뢰구간은 테스트 블록 행에 대한 paired bootstrap으로 낸다. resample마다 행별 Poisson(1) weight를 한 번 뽑아 비교하는 모든 모델에 같이 쓰고, LogLoss·AUC·PCOC 차이의 2.5–97.5 백분위를 구간으로 한다. resample 수는 1000이다. seed 간 차이는 별도로 평균 ± 표준편차로 보고한다. 하향 샘플링 모델은 prior correction 후 예측으로 비교한다.
 **이유**: 같은 행을 두 모델에 똑같이 쓰면 행 단위 잡음이 상쇄되어, 따로 구한 구간보다 차이의 구간이 훨씬 좁고 정확하다. Poisson weight는 n이 수백만일 때 multinomial resampling과 사실상 같으면서, 정렬을 한 번만 해 두고 resample마다 O(n)으로 AUC를 다시 계산할 수 있다.

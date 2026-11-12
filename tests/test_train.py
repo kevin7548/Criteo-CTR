@@ -215,3 +215,35 @@ def test_keep_rate_one_reports_identical_raw_and_corrected(tmp_path, encoded):
     assert report["train_rows_sampled"] == report["train_rows"]
     assert report["val_corrected"] == report["val"]
 
+
+# --- DCNv2 (ADR-012) --------------------------------------------------------
+
+
+def test_load_config_passes_model_arguments(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text('[model]\nname = "dcnv2"\nembed_dim = 8\nhidden = [32, 16]\n')
+    cfg = load_config(path)
+    assert cfg.model == "dcnv2"
+    assert cfg.model_args == {"embed_dim": 8, "hidden": [32, 16]}
+
+
+def test_dcnv2_trains_through_the_same_pipeline_and_beats_constant(tmp_path, encoded):
+    args = {"embed_dim": 4, "cross_layers": 2, "hidden": [16]}
+    report = run(make_config(tmp_path, encoded, model="dcnv2", model_args=args, lr=0.005))
+
+    assert report["config"]["model"] == "dcnv2"
+    assert report["n_params"] > 0
+    assert report["val"]["ne"] < 1
+    assert report["test"]["auc"] > 0.6
+    assert (tmp_path / "artifacts" / "test_pred.npy").exists()
+
+
+def test_dcnv2_seed_changes_the_initialisation(tmp_path, encoded):
+    args = {"embed_dim": 4, "cross_layers": 1, "hidden": [8]}
+    preds = []
+    for seed in (0, 1):
+        out = tmp_path / str(seed)
+        cfg = make_config(out, encoded, model="dcnv2", model_args=args, seed=seed, epochs=1)
+        run(cfg)
+        preds.append(np.load(out / "artifacts" / "val_pred.npy"))
+    assert not np.allclose(preds[0], preds[1])
