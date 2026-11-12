@@ -28,23 +28,24 @@ Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에�
 | 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 완료 |
 | 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 완료 |
 | 3 | LR 학습 | 완료 |
-| 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 예정 |
-| 5 | DCNv2와 LR 비교 (seed 3개, bootstrap 신뢰구간) | 예정 |
+| 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 완료 |
+| 5 | DCNv2와 LR 비교 (seed 3개, bootstrap 신뢰구간) | 완료 |
 | 6 | (선택) 피처 빈도 구간(head/mid/tail/OOV)별 LogLoss · ECE | 예정 |
 
 ## 결과
 
-### LR (3단계)
+1–5단계 전체 결과와 해석은 **[reports/RESULTS.md](reports/RESULTS.md)**에 있다. 아래는 테스트 블록(7) 기준 요약이다.
 
-블록 1–5 전체(32,743,297행)로 학습, 검증 LogLoss가 가장 낮은 2번째 epoch을 남김. 전처리는 ADR-009, 학습 절차는 ADR-010. 학습률은 앞쪽 5개 shard로 고름(`reports/lr_smoke_sweep.log`). 전체 수치는 `reports/lr.json`.
-
-| split | LogLoss | NE | AUC | ECE | PCOC |
+| 모델 | LogLoss | NE | AUC | ECE | PCOC |
 |---|---|---|---|---|---|
-| 상수 CTR (val) | 0.56984 | 1 | 0.5 | – | – |
-| LR val (블록 6) | 0.45745 | 0.8028 | 0.7938 | 0.00326 | 1.0006 |
-| LR test (블록 7) | 0.46184 | 0.8063 | 0.7909 | 0.00409 | 0.9925 |
+| 상수 CTR | 0.57278 | 1 | 0.5 | – | 0.983 |
+| LR (seed 3개 평균) | 0.46171 | 0.8061 | 0.7909 | 0.0028 | 1.001 |
+| DCNv2 (seed 3개 평균) | 0.44825 | 0.7826 | 0.8064 | 0.0079 | 1.019 |
+| LR, 음성 10%만 학습 (w = 0.1), 보정 전 | 0.90582 | 1.5814 | 0.7886 | 0.4020 | 2.548 |
+| LR, w = 0.1, 보정 후 | 0.46418 | 0.8104 | 0.7886 | 0.0088 | 0.971 |
 
-downsampling 없이 학습한 LR은 평균적으로 거의 calibrated 되어 있다(PCOC ≈ 1). 4단계에서 비교할 기준 모델이다.
+- 음성을 10%만 남기면 AUC는 0.7909 → 0.7886으로 거의 그대로지만 평균 예측 CTR이 2.55배로 부풀고, 보정 전 NE는 1을 넘는다. `logit(q) = logit(p) + log w` 한 줄로 ECE 0.402 → 0.0088, LogLoss 0.906 → 0.464로 돌아온다.
+- DCNv2는 LR보다 LogLoss와 AUC가 모두 좋지만 ECE는 오히려 3배 가까이 나쁘다. 순위가 좋아진다고 calibration이 따라오지 않는다.
 
 ## 지표
 
@@ -81,5 +82,11 @@ uv run python -m ctr.data.encode --blocks data/blocks --out data/encoded --min-c
 # LR: 앞쪽 일부로 먼저 확인한 뒤 전체 학습 → reports/lr.json, artifacts/lr/ (ADR-010)
 uv run python -m ctr.train --config configs/lr_smoke.toml
 uv run python -m ctr.train --config configs/lr.toml
+# negative downsampling (ADR-011) → reports/downsampling/
+for w in 050 025 010; do uv run python -m ctr.train --config configs/lr_w$w.toml; done
+# DCNv2 vs LR, seed 0–2 (ADR-012) → reports/model_comparison/
+for c in dcnv2_s0 dcnv2_s1 dcnv2_s2 lr_s1 lr_s2; do uv run python -m ctr.train --config configs/$c.toml; done
+# paired bootstrap 신뢰구간 (ADR-013), 명령 전체는 reports/RESULTS.md
+uv run python -m ctr.compare --help
 uv run ruff check .
 ```
