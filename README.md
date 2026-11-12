@@ -27,10 +27,24 @@ Criteo 클릭 로그로 **AUC로는 안 보이지만 LogLoss와 calibration에�
 |---|---|---|
 | 1 | TSV → Parquet 변환, 시간순 분할, 상수 CTR 기준선 | 완료 |
 | 2 | LogLoss, AUC, ECE, NE, PCOC 직접 구현 | 완료 |
-| 3 | LR 학습 | 예정 |
+| 3 | LR 학습 | 완료 |
 | 4 | Negative downsampling(`w` ∈ {1, 0.5, 0.25, 0.1}) 후 보정 | 예정 |
 | 5 | DCNv2와 LR 비교 (seed 3개, bootstrap 신뢰구간) | 예정 |
 | 6 | (선택) 피처 빈도 구간(head/mid/tail/OOV)별 LogLoss · ECE | 예정 |
+
+## 결과
+
+### LR (3단계)
+
+블록 1–5 전체(32,743,297행)로 학습, 검증 LogLoss가 가장 낮은 2번째 epoch을 남김. 전처리는 ADR-009, 학습 절차는 ADR-010. 학습률은 앞쪽 5개 shard로 고름(`reports/lr_smoke_sweep.log`). 전체 수치는 `reports/lr.json`.
+
+| split | LogLoss | NE | AUC | ECE | PCOC |
+|---|---|---|---|---|---|
+| 상수 CTR (val) | 0.56984 | 1 | 0.5 | – | – |
+| LR val (블록 6) | 0.45745 | 0.8028 | 0.7938 | 0.00326 | 1.0006 |
+| LR test (블록 7) | 0.46184 | 0.8063 | 0.7909 | 0.00409 | 0.9925 |
+
+downsampling 없이 학습한 LR은 평균적으로 거의 calibrated 되어 있다(PCOC ≈ 1). 4단계에서 비교할 기준 모델이다.
 
 ## 지표
 
@@ -62,5 +76,10 @@ uv run pytest -q
 uv run python -m ctr.data.split --src kaggle-display-advertising-challenge-dataset/train.txt --out data/blocks
 # 상수 CTR 기준선 → reports/baseline_constant.json
 uv run python -m ctr.baseline
+# 학습 블록 vocab + 전체 블록 id 인코딩 → data/encoded (ADR-009)
+uv run python -m ctr.data.encode --blocks data/blocks --out data/encoded --min-count 10
+# LR: 앞쪽 일부로 먼저 확인한 뒤 전체 학습 → reports/lr.json, artifacts/lr/ (ADR-010)
+uv run python -m ctr.train --config configs/lr_smoke.toml
+uv run python -m ctr.train --config configs/lr.toml
 uv run ruff check .
 ```

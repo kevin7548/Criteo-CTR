@@ -1,0 +1,18 @@
+== lr=0.0003
+epoch 1: train_logloss=0.49175 val_logloss=0.48494 ne=0.8343 auc=0.7727 ece=0.01896 pcoc=0.9963 (13s)
+epoch 2: train_logloss=0.46418 val_logloss=0.47642 ne=0.8196 auc=0.7820 ece=0.01222 pcoc=0.9990 (11s)
+epoch 3: train_logloss=0.45719 val_logloss=0.47301 ne=0.8138 auc=0.7857 ece=0.00889 pcoc=0.9990 (11s)
+val  logloss=0.47301 ne=0.8138 auc=0.7857 ece=0.00889 pcoc=0.9990
+== lr=0.001
+epoch 1: train_logloss=0.47154 val_logloss=0.47269 ne=0.8132 auc=0.7860 ece=0.00800 pcoc=0.9936 (11s)
+epoch 2: train_logloss=0.45204 val_logloss=0.46941 ne=0.8076 auc=0.7894 ece=0.00504 pcoc=0.9934 (11s)
+epoch 3: train_logloss=0.44662 val_logloss=0.46870 ne=0.8064 auc=0.7902 ece=0.00327 pcoc=1.0048 (11s)
+val  logloss=0.46870 ne=0.8064 auc=0.7902 ece=0.00327 pcoc=1.0048
+== lr=0.003
+epoch 1: train_logloss=0.46227 val_logloss=0.47012 ne=0.8088 auc=0.7887 ece=0.00756 pcoc=0.9808 (10s)
+epoch 2: train_logloss=0.44667 val_logloss=0.47103 ne=0.8104 auc=0.7881 ece=0.01094 pcoc=0.9819 (11s)
+val  logloss=0.47012 ne=0.8088 auc=0.7887 ece=0.00756 pcoc=0.9808
+== lr=0.01
+epoch 1: train_logloss=0.46656 val_logloss=0.48184 ne=0.8290 auc=0.7789 ece=0.02407 pcoc=0.9705 (11s)
+epoch 2: train_logloss=0.45206 val_logloss=0.48854 ne=0.8405 auc=0.7753 ece=0.02951 pcoc=1.0088 (11s)
+val  logloss=0.48184 ne=0.8290 auc=0.7789 ece=0.02407 pcoc=0.9705
