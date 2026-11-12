@@ -3,6 +3,7 @@ import json
 import numpy as np
 import pytest
 
+from ctr.calibration import sampled_ctr
 from ctr.data.dataset import split_files
 from ctr.data.encode import encode_blocks
 from ctr.evaluate import train_ctr
@@ -149,3 +150,100 @@ def test_run_is_deterministic_on_cpu(tmp_path, encoded):
         np.load(tmp_path / "a" / "artifacts" / "val_pred.npy"),
         np.load(tmp_path / "b" / "artifacts" / "val_pred.npy"),
     )
+
+
+# --- negative downsampling (ADR-005, ADR-011) ------------------------------
+
+
+def test_load_config_reads_negative_keep_rate(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text("[data]\nnegative_keep_rate = 0.25\n")
+    assert load_config(path).negative_keep_rate == pytest.approx(0.25)
+    assert TrainConfig().negative_keep_rate == 1.0
+
+
+def test_untrained_downsampled_model_starts_at_sampled_ctr(tmp_path, encoded):
+    # lr = 0 leaves the model at its initial bias: logit of the sampled training CTR.
+    # Prior correction maps that back to the training-block CTR.
+    report = run(make_config(tmp_path, encoded, lr=0.0, epochs=1, negative_keep_rate=0.25))
+
+    assert report["train_ctr_sampled"] == pytest.approx(sampled_ctr(report["base_rate"], 0.25))
+    assert report["val"]["mean_pred"] == pytest.approx(report["train_ctr_sampled"])
+    assert report["val_corrected"]["mean_pred"] == pytest.approx(report["base_rate"])
+    assert report["val_corrected"]["ne"] == pytest.approx(1.0, abs=0.02)
+
+
+def test_downsampled_run_trains_on_fewer_rows_but_evaluates_on_all(tmp_path, encoded):
+    cfg = make_config(tmp_path, encoded, negative_keep_rate=0.25)
+    report = run(cfg)
+    manifest = json.loads((encoded / "manifest.json").read_text())
+
+    assert report["negative_keep_rate"] == 0.25
+    assert report["train_positives"] < report["train_rows_sampled"] < report["train_rows"]
+    for split, block in (("val", "6"), ("test", "7")):
+        for key in (split, f"{split}_corrected"):
+            assert report[key]["n"] == manifest["blocks"][block]["rows"]
+            assert report[key]["positives"] == manifest["blocks"][block]["positives"]
+
+
+def test_prior_correction_fixes_the_mean_but_not_the_ranking(tmp_path, encoded):
+    report = run(make_config(tmp_path, encoded, negative_keep_rate=0.25))
+
+    for split in ("val", "test"):
+        raw, fixed = report[split], report[f"{split}_corrected"]
+        assert raw["pcoc"] > 1.3  # sampled_ctr(c, 0.25) / c is ~1.7 on this data
+        assert abs(fixed["pcoc"] - 1) < abs(raw["pcoc"] - 1)
+        assert fixed["logloss"] < raw["logloss"]
+        assert fixed["auc"] == pytest.approx(raw["auc"], abs=1e-12)
+
+    val = np.load(tmp_path / "artifacts" / "val_pred.npy")
+    assert val.mean() == pytest.approx(report["val"]["mean_pred"], rel=1e-5)
+
+
+def test_downsampled_run_keeps_the_epoch_with_best_corrected_val_logloss(tmp_path, encoded):
+    report = run(make_config(tmp_path, encoded, negative_keep_rate=0.25, epochs=4, patience=4))
+
+    losses = [h["val_corrected"]["logloss"] for h in report["history"]]
+    assert losses[report["best_epoch"] - 1] == min(losses)
+    assert report["val_corrected"]["logloss"] == pytest.approx(min(losses))
+
+
+def test_keep_rate_one_reports_identical_raw_and_corrected(tmp_path, encoded):
+    report = run(make_config(tmp_path, encoded, epochs=1))
+
+    assert report["negative_keep_rate"] == 1.0
+    assert report["train_rows_sampled"] == report["train_rows"]
+    assert report["val_corrected"] == report["val"]
+
+
+# --- DCNv2 (ADR-012) --------------------------------------------------------
+
+
+def test_load_config_passes_model_arguments(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text('[model]\nname = "dcnv2"\nembed_dim = 8\nhidden = [32, 16]\n')
+    cfg = load_config(path)
+    assert cfg.model == "dcnv2"
+    assert cfg.model_args == {"embed_dim": 8, "hidden": [32, 16]}
+
+
+def test_dcnv2_trains_through_the_same_pipeline_and_beats_constant(tmp_path, encoded):
+    args = {"embed_dim": 4, "cross_layers": 2, "hidden": [16]}
+    report = run(make_config(tmp_path, encoded, model="dcnv2", model_args=args, lr=0.005))
+
+    assert report["config"]["model"] == "dcnv2"
+    assert report["n_params"] > 0
+    assert report["val"]["ne"] < 1
+    assert report["test"]["auc"] > 0.6
+    assert (tmp_path / "artifacts" / "test_pred.npy").exists()
+
+
+def test_dcnv2_seed_changes_the_initialisation(tmp_path, encoded):
+    args = {"embed_dim": 4, "cross_layers": 1, "hidden": [8]}
+    preds = []
+    for seed in (0, 1):
+        out = tmp_path / str(seed)
+        cfg = make_config(out, encoded, model="dcnv2", model_args=args, seed=seed, epochs=1)
+        run(cfg)
+        preds.append(np.load(out / "artifacts" / "val_pred.npy"))
+    assert not np.allclose(preds[0], preds[1])

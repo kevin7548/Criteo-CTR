@@ -1,0 +1,26 @@
+# DCNv2 on all training blocks, seed 2 (ADR-012). Same data, loop and epoch selection as LR.
+# lr = 0.003 was the best of {3e-4, 1e-3, 3e-3, 1e-2} on the smoke slice (reports/dcnv2_smoke_sweep.log).
+seed = 2
+device = "auto"
+
+[model]
+name = "dcnv2"
+embed_dim = 16
+cross_layers = 3
+hidden = [400, 400, 400]
+dropout = 0.0
+
+[data]
+encoded = "data/encoded"
+evaluate_test = true
+
+[train]
+batch_size = 4096
+lr = 0.003
+epochs = 4
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/dcnv2_s2"
+report = "reports/model_comparison/dcnv2_s2.json"

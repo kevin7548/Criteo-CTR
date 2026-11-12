@@ -1,0 +1,24 @@
+# LR with negatives kept at w = 0.1 on the training blocks only (ADR-005, ADR-011).
+# Same settings as configs/lr.toml (w = 1); epochs is raised because smaller w means
+# fewer rows per epoch, and patience still stops the run.
+seed = 0
+device = "auto"
+
+[model]
+name = "lr"
+
+[data]
+encoded = "data/encoded"
+evaluate_test = true
+negative_keep_rate = 0.1
+
+[train]
+batch_size = 4096
+lr = 0.001
+epochs = 10
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/lr_w010"
+report = "reports/downsampling/lr_w010.json"
