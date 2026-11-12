@@ -1,0 +1,22 @@
+# LR on all training blocks (1–5), epoch chosen on the full validation block (6), test block (7) once.
+# lr = 0.001 was the best of {3e-4, 1e-3, 3e-3, 1e-2} in the smoke run (reports/lr_smoke_sweep.log).
+seed = 0
+device = "auto"
+
+[model]
+name = "lr"
+
+[data]
+encoded = "data/encoded"
+evaluate_test = true
+
+[train]
+batch_size = 4096
+lr = 0.001
+epochs = 5
+patience = 1
+shards_per_chunk = 5
+
+[output]
+artifacts = "artifacts/lr"
+report = "reports/lr.json"
